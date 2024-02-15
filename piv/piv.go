@@ -41,6 +41,9 @@ var (
 		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
 		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
 	}
+
+	// DebugOpen can be set if you have an issue during the open calls and want to dump those apdu's.
+	DebugOpen = false
 )
 
 // Cards lists all smart cards available via PC/SC interface. Card names are
@@ -94,6 +97,15 @@ const (
 	insAttest        = 0xf9
 	insGetSerial     = 0xf8
 	insGetMetadata   = 0xf7
+
+	// https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-73-4.pdf#page=95
+	paramAsymmetricCryptoMechanism = 0x80
+	paramAsymmetricParameter       = 0x81
+)
+
+const (
+	modePiv = 0x00
+	modeGPG = 0x01
 )
 
 // YubiKey is an exclusive open connection to a YubiKey smart card. While open,
@@ -115,6 +127,11 @@ type YubiKey struct {
 	version *version
 }
 
+type GPGYubiKey struct {
+	YubiKey
+	gpgData *GpgData
+}
+
 // Close releases the connection to the smart card.
 func (yk *YubiKey) Close() error {
 	err1 := yk.h.Close()
@@ -125,7 +142,17 @@ func (yk *YubiKey) Close() error {
 	return err1
 }
 
-// Open connects to a YubiKey smart card.
+// EnableDebug will cause the contents of every apdu to be dumped to console until DisableDebug is called.
+func (yk *YubiKey) EnableDebug() {
+	yk.tx.EnableDebug()
+}
+
+// DisableDebug will stop dumping the contents of every apdu to console.
+func (yk *YubiKey) DisableDebug() {
+	yk.tx.EnableDebug()
+}
+
+// Open connects to a YubiKey PIV smart card.
 func Open(card string) (*YubiKey, error) {
 	var c client
 	return c.Open(card)
@@ -164,6 +191,12 @@ func (c *client) Open(card string) (*YubiKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("beginning smart card transaction: %w", err)
 	}
+
+	// if DebugOpen was set, set debug on the tx so we can see dumps from here out.
+	if DebugOpen {
+		tx.EnableDebug()
+	}
+
 	if err := ykSelectApplication(tx, aidPIV[:]); err != nil {
 		tx.Close()
 		return nil, fmt.Errorf("selecting piv applet: %w", err)
@@ -596,9 +629,9 @@ func ykSelectApplication(tx *scTx, id []byte) error {
 	return nil
 }
 
-func ykVersion(tx *scTx) (*version, error) {
+func loadYkVersion(tx *scTx, versionInstruction byte) (*version, error) {
 	cmd := apdu{
-		instruction: insGetVersion,
+		instruction: versionInstruction,
 	}
 	resp, err := tx.Transmit(cmd)
 	if err != nil {
@@ -608,6 +641,10 @@ func ykVersion(tx *scTx) (*version, error) {
 		return nil, fmt.Errorf("expected response to have 3 bytes, got: %d", n)
 	}
 	return &version{resp[0], resp[1], resp[2]}, nil
+}
+
+func ykVersion(tx *scTx) (*version, error) {
+	return loadYkVersion(tx, insGetVersion)
 }
 
 func ykSerial(tx *scTx, v *version) (uint32, error) {
