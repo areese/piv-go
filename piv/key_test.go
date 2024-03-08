@@ -493,7 +493,7 @@ func TestTLS13(t *testing.T) {
 		defer conn.Close()
 
 		if v := conn.ConnectionState().Version; v != tls.VersionTLS13 {
-			errCh <- fmt.Errorf("client got verison 0x%x, want=0x%x", v, tls.VersionTLS13)
+			errCh <- fmt.Errorf("client got version 0x%x, want=0x%x", v, tls.VersionTLS13)
 			return
 		}
 
