@@ -1,4 +1,4 @@
-// Copyright 2024 Apple, Inc.
+//  Copyright © 2024 Apple Inc. All rights reserved.
 // Copyright 2020 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
